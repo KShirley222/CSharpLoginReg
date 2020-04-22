@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using LoginNRegister.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
 
 namespace LoginNRegister.Controllers
 {
@@ -38,11 +39,17 @@ namespace LoginNRegister.Controllers
                 }
                 else
                 {
+                    // Hashing password
                     PasswordHasher<User> Hasher = new PasswordHasher<User>();
                     newUser.Password = Hasher.HashPassword( newUser, newUser.Password);
-                    
+
+                    // creating new user in DB
                     dbContext.Add(newUser);
                     dbContext.SaveChanges();
+                    
+                    // Creating session 
+                    HttpContext.Session.SetInt32("UserId", newUser.UserId);
+
                     return Redirect("success"); 
                 }
             }
@@ -60,22 +67,30 @@ namespace LoginNRegister.Controllers
         {
             if(ModelState.IsValid)
             {
+                // Check DB for matching user email
                 var userInDb = dbContext.Users.FirstOrDefault(u => u.Email == userSubmission.Email);
                 if (userInDb == null)
                 {
+                    // if false
                     ModelState.AddModelError( "Email", "Invalid Email/Password");
                     return View("login");
                 }
-                var hasher = new PasswordHasher<LoginUser>();
-                var result = hasher.VerifyHashedPassword(userSubmission, userInDb.Password, userSubmission.Password);
-                if(result == 0)
-                {
-                    ModelState.AddModelError( "Email", "Invalid Email/Password");
-                    return View("login");
-                }
-                else
-                {
-                    return View("success");
+                else{
+                    //  if email is valid hash user login password and compare to hashed user in Db
+                    var hasher = new PasswordHasher<LoginUser>();
+                    var result = hasher.VerifyHashedPassword(userSubmission, userInDb.Password, userSubmission.Password);
+                    if(result == 0)
+                    {
+                        // If password is invalid
+                        ModelState.AddModelError( "Email", "Invalid Email/Password");
+                        return View("login");
+                    }
+                    else
+                    {
+                        // Create Session
+                         HttpContext.Session.SetInt32("UserId", userInDb.UserId);
+                        return View("success");
+                    }
                 }
 
             }
@@ -85,7 +100,23 @@ namespace LoginNRegister.Controllers
         [HttpGet("success")]
         public IActionResult Success()
         {
-            return View("success");
+            // Check for session userId
+            int? LoginCheck = HttpContext.Session.GetInt32("UserId");
+            if(LoginCheck == null)
+            {
+                return View("index");
+            }
+            else{
+                return View("success");
+            }
+        }
+
+        [HttpGet("Logout")]
+        public IActionResult Logout()
+        {
+            // clear session
+            HttpContext.Session.Clear();
+            return View("index");
         }
     }
 }
